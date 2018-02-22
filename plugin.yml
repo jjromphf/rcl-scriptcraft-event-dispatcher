@@ -1,0 +1,5 @@
+name: ScriptCraftEvent
+main: org.eventdispatcher.events.scriptcraft.ScriptCraftEventPlugin
+author: jromphf
+version: 1.0.0
+description: adds a native event we can dispatch with ScriptCraft
