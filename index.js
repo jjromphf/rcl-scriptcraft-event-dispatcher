@@ -1,70 +1,55 @@
-// a native Bukkit event
 
 var events = require('events');
+
 var EventDispatcher = function() {
-  this.queue = {};
-  this.dispatched = {};
+  var that = this;
+  that.queue = {};
+  that.dispatched = {};
   try {
     var ScriptCraftEvent = Java.type('org.eventdispatcher.events.scriptcraft.ScriptCraftEventWrapper');
-    this.nativeEvent = function(name) { return new ScriptCraftEvent(name); }
-    this.nativeEventClass = ScriptCraftEvent;
+    that.nativeEvent = function(name) { return new ScriptCraftEvent(name); }
+    that.nativeEventClass = ScriptCraftEvent;
   } catch(error) {
     // no native event support
     console.log("Warning: EventDispatcher constructed without native support. To enable, move event-dispatcher.jar to SpigotMC's plugins folder");
-    this.nativeEvent = null;
-    this.nativeEventClass = null;
+    that.nativeEvent = null;
+    that.nativeEventClass = null;
+    // TODO add ability to unregister
   }
-}
 
-EventDispatcher.prototype.on = function(eventType, callback) {
-  if (events[eventType] !== undefined) {
-    events[eventType](callback);
-  } else {
-    if (this.dispatched[eventType] === true) {
-      return callback();
+  return {
+    nativeEvent: that.nativeEvent,
+    nativeEventClass: that.nativeEventClass,
+    on: function(eventType, callback) {
+      if (events[eventType] !== undefined) {
+        events[eventType](callback);
+      } else {
+        if (that.dispatched[eventType] === true) {
+          return callback();
+        }
+        if (that.queue[eventType] === undefined) {
+          that.queue[eventType] = [];
+        }
+        that.queue[eventType].push(callback);
+      }
+    },
+
+    dispatch: function(eventType, eventData) {
+      if (that.queue[eventType] === undefined) {
+        return;
+      }
+      that.queue[eventType].forEach(function(callback) {
+        callback(eventData);
+        if (that.nativeEvent !== null) {
+          var ne = that.nativeEvent(eventType).getEvent();
+          ne.data = eventData;
+          server.getPluginManager().callEvent(ne);
+        }
+      }.bind(that));
+      that.queue[eventType] = [];
+      that.dispatched[eventType] = true;
     }
-    if (this.queue[eventType] === undefined) {
-      this.queue[eventType] = [];
-    }
-    this.queue[eventType].push(callback);
   }
-}
+}();
 
-EventDispatcher.prototype.dispatch = function(eventType, eventData) {
-  if (this.queue[eventType] === undefined) {
-    return;
-  }
-  this.queue[eventType].forEach(function(callback) {
-    callback(eventData);
-    if (this.nativeEvent !== null) {
-      var ne = this.nativeEvent(eventType).getEvent();
-      ne.data = eventData;
-      server.getPluginManager().callEvent(ne);
-    }
-  }.bind(this));
-  this.queue[eventType] = [];
-  this.dispatched[eventType] = true;
-}
-
-function testCustomEvent() {
-  var eventSystem = new EventDispatcher();
-  // we can add handlers for all events, as well as our own js events
-  eventSystem.on('test', function(event) {
-    console.log('Nashorn Event');
-    console.log(event.message);
-  });
-  // native plugins can listen to our events via ScriptCraftEvent, which has eventType + data
-  if (eventSystem.nativeEventClass !== null) {
-    events.on(eventSystem.nativeEventClass, function(event) {
-      console.log('Native Event');
-      console.log(event.eventType);
-      console.log(event.data.message);
-    });
-  }
-  eventSystem.dispatch('test', { message: "this worked"});
-}
-
-module.exports = {
-  EventDispatcher: EventDispatcher,
-  test: testCustomEvent,
-}
+module.exports = EventDispatcher;
